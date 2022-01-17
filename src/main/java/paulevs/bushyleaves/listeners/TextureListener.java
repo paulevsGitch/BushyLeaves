@@ -32,6 +32,7 @@ import java.util.Optional;
 
 public class TextureListener {
 	private static final Map<BlockBase, Map<Byte, Integer>> TEXTURES = new HashMap<>();
+	private static final Map<BlockBase, Map<Byte, Integer>> SNOWY = new HashMap<>();
 	private static int[] defaultMask;
 	
 	public static final String MOD_ID = "bushyleaves";
@@ -41,15 +42,6 @@ public class TextureListener {
 	public void registerBlocks(TextureRegisterEvent event) {
 		BufferedImage mask = imageFromPath("/assets/bushyleaves/textures/leaf_mask.png");
 		int innerID = 0;
-		
-		/*for (byte meta = 0; meta < 4; meta++) {
-			int texture = BlockBase.LEAVES.getTextureForSide(0, meta);
-			BufferedImage image = extractTexture(BlockBase.LEAVES, texture);
-			localTexture = makeTexture(image, mask);
-			Sprite sprite = Atlases.getStationTerrain().addTexture(MOD_ID + "_" + (innerID++));
-			localTexture = null;
-			getTextures(BlockBase.LEAVES).add(sprite.index);
-		}*/
 		
 		Byte negative = Byte.valueOf((byte) -1);
 		List<Byte> meta16 = new ArrayList<>(16);
@@ -64,6 +56,7 @@ public class TextureListener {
 			
 			int lastTexture = -1;
 			int lastSprite = -1;
+			int lastSpriteSnow = -1;
 			BlockBase block = leaf.block;
 			List<Byte> metas = leaf.meta;
 			if (metas.contains(negative)) {
@@ -76,21 +69,19 @@ public class TextureListener {
 					BufferedImage image = extractTexture(block, texture);
 					localTexture = makeTexture(image, mask);
 					Sprite sprite = Atlases.getStationTerrain().addTexture(MOD_ID + "_" + (innerID++));
-					
-					try {
-						ImageIO.write(localTexture, "png", new File(leaf.block.id + "_" + meta + ".png"));
-					}
-					catch (IOException e) {
-						e.printStackTrace();
-					}
-					
-					localTexture = null;
 					getTextures(block).put(meta, sprite.index);
 					lastSprite = sprite.index;
 					lastTexture = texture;
+					
+					localTexture = makeSnow(localTexture);
+					sprite = Atlases.getStationTerrain().addTexture(MOD_ID + "_" + (innerID++));
+					getTexturesSnow(block).put(meta, sprite.index);
+					lastSpriteSnow = sprite.index;
+					localTexture = null;
 				}
 				else {
 					getTextures(block).put(meta, lastSprite);
+					getTexturesSnow(block).put(meta, lastSpriteSnow);
 				}
 			}
 		}
@@ -170,8 +161,17 @@ public class TextureListener {
 		return TEXTURES.computeIfAbsent(block, i -> new HashMap<>());
 	}
 	
+	private Map<Byte, Integer> getTexturesSnow(BlockBase block) {
+		return SNOWY.computeIfAbsent(block, i -> new HashMap<>());
+	}
+	
 	public static int getTexture(BlockBase block, byte meta) {
 		Map<Byte, Integer> map = TEXTURES.get(block);
+		return map == null ? -1 : map.getOrDefault(meta, -1);
+	}
+	
+	public static int getTextureSnow(BlockBase block, byte meta) {
+		Map<Byte, Integer> map = SNOWY.get(block);
 		return map == null ? -1 : map.getOrDefault(meta, -1);
 	}
 	
@@ -249,6 +249,44 @@ public class TextureListener {
 			exception.printStackTrace();
 		}
 		return new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
+	}
+	
+	private BufferedImage makeSnow(BufferedImage image) {
+		int width = image.getWidth();
+		int height = image.getHeight();
+		
+		BufferedImage snow = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+		int[] dataSource = new int[width * height];
+		int[] dataResult = new int[dataSource.length];
+		image.getRGB(0, 0, width, height, dataSource, 0, width);
+		
+		int white = 255 << 16 | 255 << 8 | 255;
+		int gradientStart = height * 2 / 3;
+		int gradientEnd = height / 3;
+		
+		for (int i = 0; i < dataSource.length; i++) {
+			int alpha = (dataSource[i] >> 24) & 255;
+			int y = i / width;
+			if (y > gradientEnd) {
+				if (y < gradientStart && alpha > 0) {
+					if (((dataSource[i - width] >> 24) & 255) == 0) {
+						dataResult[i] = alpha << 24 | white;
+					}
+					else if (((dataSource[i - width * 2] >> 24) & 255) == 0) {
+						dataResult[i] = alpha << 24 | white;
+					}
+					else if (((dataSource[i - width * 3] >> 24) & 255) == 0) {
+						dataResult[i] = alpha << 24 | white;
+					}
+				}
+			}
+			else if (alpha > 0) {
+				dataResult[i] = alpha << 24 | white;
+			}
+		}
+		
+		snow.setRGB(0, 0, width, height, dataResult, 0, width);
+		return snow;
 	}
 	
 	private class LeafInfo {

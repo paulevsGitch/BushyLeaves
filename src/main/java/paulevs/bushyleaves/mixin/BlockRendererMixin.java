@@ -37,23 +37,26 @@ public class BlockRendererMixin {
 		shift = Shift.BEFORE
 	), cancellable = true, locals = LocalCapture.CAPTURE_FAILSOFT)
 	private void leaves_render(BlockBase block, int x, int y, int z, CallbackInfoReturnable<Boolean> info, int side) {
-		int texture = TextureListener.getTexture(block, (byte) blockView.getTileMeta(x, y, z));
+		byte meta = (byte) blockView.getTileMeta(x, y, z);
+		int texture = TextureListener.getTexture(block, meta);
 		if (texture > -1) {
 			if (!leaves_canRender(x, y, z)) {
 				info.setReturnValue(false);
 			}
 			else if (textureOverride == -1) {
-				leaves_largeCross(block, texture, x, y, z);
+				leaves_largeCross(block, texture, x, y, z, true);
+				int above = blockView.getTileId(x, y + 1, z);
+				if (above == BlockBase.SNOW.id || above == BlockBase.SNOW_BLOCK.id) {
+					texture = TextureListener.getTextureSnow(block, meta);
+					if (texture > -1) {
+						leaves_largeCross(block, texture, x, y, z, false);
+					}
+				}
 			}
 		}
 	}
 	
-	@Shadow
-	public boolean renderStandardBlock(BlockBase block, int x, int y, int z) {
-		return false;
-	}
-	
-	private void leaves_largeCross(BlockBase block, int texture, int x, int y, int z) {
+	private void leaves_largeCross(BlockBase block, int texture, int x, int y, int z, boolean colored) {
 		Atlas atlas = Atlases.getStationTerrain();
 		Tessellator tessellator = atlas.getTessellator();
 		
@@ -69,7 +72,7 @@ public class BlockRendererMixin {
 		if (block.isFullOpaque()) {
 			light = leaves_getMaxLight(x, y, z);
 		}
-		int rgb = block.getColourMultiplier(blockView, x, y, z);
+		int rgb = colored ? block.getColourMultiplier(blockView, x, y, z) : 16777215;
 		tessellator.colour((int) (((rgb >> 16) & 255) * light), (int) (((rgb >> 8) & 255) * light), (int) ((rgb & 255) * light));
 		
 		Sprite sprite = atlas.getTexture(texture);
