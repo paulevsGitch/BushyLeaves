@@ -31,8 +31,10 @@ import java.util.Map;
 import java.util.Optional;
 
 public class TextureListener {
-	private static final Map<BlockBase, Map<Byte, Integer>> TEXTURES = new HashMap<>();
-	private static final Map<BlockBase, Map<Byte, Integer>> SNOWY = new HashMap<>();
+	private static final Map<BlockBase, Map<Byte, LeafTextureInfo>> TEXTURES = new HashMap<>();
+	public static boolean renderTopAndBottom = true;
+	//private static final Map<BlockBase, Map<Byte, Integer>> TEXTURES = new HashMap<>();
+	//private static final Map<BlockBase, Map<Byte, Integer>> SNOWY = new HashMap<>();
 	private static int[] defaultMask;
 	
 	public static final String MOD_ID = "bushyleaves";
@@ -41,6 +43,7 @@ public class TextureListener {
 	@EventListener
 	public void registerBlocks(TextureRegisterEvent event) {
 		BufferedImage mask = imageFromPath("/assets/bushyleaves/textures/leaf_mask.png");
+		BufferedImage snow = extractTexture(BlockBase.SNOW_BLOCK, BlockBase.SNOW_BLOCK.texture);
 		int innerID = 0;
 		
 		Byte negative = Byte.valueOf((byte) -1);
@@ -55,8 +58,8 @@ public class TextureListener {
 			System.out.println(leaf);
 			
 			int lastTexture = -1;
-			int lastSprite = -1;
-			int lastSpriteSnow = -1;
+			LeafTextureInfo lastInfo = null;
+			
 			BlockBase block = leaf.block;
 			List<Byte> metas = leaf.meta;
 			if (metas.contains(negative)) {
@@ -67,21 +70,28 @@ public class TextureListener {
 				int texture = block.getTextureForSide(0, meta);
 				if (texture != lastTexture) {
 					BufferedImage image = extractTexture(block, texture);
+					Map<Byte, LeafTextureInfo> textures = getTextures(block);
+					
 					localTexture = makeTexture(image, mask);
 					Sprite sprite = Atlases.getStationTerrain().addTexture(MOD_ID + "_" + (innerID++));
-					getTextures(block).put(meta, sprite.index);
-					lastSprite = sprite.index;
+					int textureBushy = sprite.index;
 					lastTexture = texture;
 					
-					localTexture = makeSnow(localTexture);
+					localTexture = makeSnow(localTexture, snow);
 					sprite = Atlases.getStationTerrain().addTexture(MOD_ID + "_" + (innerID++));
-					getTexturesSnow(block).put(meta, sprite.index);
-					lastSpriteSnow = sprite.index;
+					int textureBushySnow = sprite.index;
+					
+					localTexture = makeSnow(image, snow);
+					sprite = Atlases.getStationTerrain().addTexture(MOD_ID + "_" + (innerID++));
+					int textureSideSnow = sprite.index;
+					
+					lastInfo = new LeafTextureInfo(textureBushy, textureBushySnow, textureSideSnow);
+					textures.put(meta, lastInfo);
+					
 					localTexture = null;
 				}
-				else {
-					getTextures(block).put(meta, lastSprite);
-					getTexturesSnow(block).put(meta, lastSpriteSnow);
+				else if (lastInfo != null) {
+					getTextures(block).put(meta, lastInfo);
 				}
 			}
 		}
@@ -157,22 +167,13 @@ public class TextureListener {
 		return leaves.values();
 	}
 	
-	private Map<Byte, Integer> getTextures(BlockBase block) {
+	private Map<Byte, LeafTextureInfo> getTextures(BlockBase block) {
 		return TEXTURES.computeIfAbsent(block, i -> new HashMap<>());
 	}
 	
-	private Map<Byte, Integer> getTexturesSnow(BlockBase block) {
-		return SNOWY.computeIfAbsent(block, i -> new HashMap<>());
-	}
-	
-	public static int getTexture(BlockBase block, byte meta) {
-		Map<Byte, Integer> map = TEXTURES.get(block);
-		return map == null ? -1 : map.getOrDefault(meta, -1);
-	}
-	
-	public static int getTextureSnow(BlockBase block, byte meta) {
-		Map<Byte, Integer> map = SNOWY.get(block);
-		return map == null ? -1 : map.getOrDefault(meta, -1);
+	public static LeafTextureInfo getTexture(BlockBase block, byte meta) {
+		Map<Byte, LeafTextureInfo> map = TEXTURES.get(block);
+		return map == null ? null : map.get(meta);
 	}
 	
 	private BufferedImage extractTexture(BlockBase block, int textureID) {
@@ -251,42 +252,47 @@ public class TextureListener {
 		return new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
 	}
 	
-	private BufferedImage makeSnow(BufferedImage image) {
+	private BufferedImage makeSnow(BufferedImage image, BufferedImage snow) {
 		int width = image.getWidth();
 		int height = image.getHeight();
 		
-		BufferedImage snow = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+		BufferedImage result = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
 		int[] dataSource = new int[width * height];
 		int[] dataResult = new int[dataSource.length];
 		image.getRGB(0, 0, width, height, dataSource, 0, width);
 		
-		int white = 255 << 16 | 255 << 8 | 255;
-		int gradientStart = height * 2 / 3;
-		int gradientEnd = height / 3;
+		int[] dataSnow = new int[snow.getWidth() * snow.getHeight()];
+		snow.getRGB(0, 0, snow.getWidth(), snow.getHeight(), dataSnow, 0, snow.getWidth());
+		
+		//int white = 255 << 16 | 255 << 8 | 255;
+		int grEnd = height * 2 / 3;
+		int grStart = height / 3;
+		int delta = grEnd - grStart;
 		
 		for (int i = 0; i < dataSource.length; i++) {
 			int alpha = (dataSource[i] >> 24) & 255;
 			int y = i / width;
-			if (y > gradientEnd) {
-				if (y < gradientStart && alpha > 0) {
-					if (((dataSource[i - width] >> 24) & 255) == 0) {
-						dataResult[i] = alpha << 24 | white;
-					}
-					else if (((dataSource[i - width * 2] >> 24) & 255) == 0) {
-						dataResult[i] = alpha << 24 | white;
-					}
-					else if (((dataSource[i - width * 3] >> 24) & 255) == 0) {
-						dataResult[i] = alpha << 24 | white;
+			int x = i % width;
+			int snowColor = dataSnow[(y % snow.getHeight()) * snow.getWidth() + (x % snow.getWidth())];
+			if (y > grStart) {
+				if (y < grEnd && alpha > 0) {
+					float depth = 1 - (float) (y - grStart) / delta;
+					int pixels = MathHelper.floor(2 + depth * 2.5);
+					for (int j = 1; j < pixels; j++) {
+						if (((dataSource[i - width * j] >> 24) & 255) == 0) {
+							dataResult[i] = alpha << 24 | snowColor;
+							break;
+						}
 					}
 				}
 			}
 			else if (alpha > 0) {
-				dataResult[i] = alpha << 24 | white;
+				dataResult[i] = alpha << 24 | snowColor;
 			}
 		}
 		
-		snow.setRGB(0, 0, width, height, dataResult, 0, width);
-		return snow;
+		result.setRGB(0, 0, width, height, dataResult, 0, width);
+		return result;
 	}
 	
 	private class LeafInfo {
@@ -295,6 +301,18 @@ public class TextureListener {
 		
 		private LeafInfo(BlockBase block) {
 			this.block = block;
+		}
+	}
+	
+	public class LeafTextureInfo {
+		public final int bushyTexture;
+		public final int bushySnow;
+		public final int snowSide;
+		
+		public LeafTextureInfo(int bushyTexture, int bushySnow, int snowSide) {
+			this.bushyTexture = bushyTexture;
+			this.bushySnow = bushySnow;
+			this.snowSide = snowSide;
 		}
 	}
 }

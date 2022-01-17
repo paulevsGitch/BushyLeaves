@@ -18,6 +18,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 import paulevs.bushyleaves.listeners.TextureListener;
+import paulevs.bushyleaves.listeners.TextureListener.LeafTextureInfo;
 
 import java.util.Random;
 
@@ -29,6 +30,9 @@ public class BlockRendererMixin {
 	@Shadow
 	private BlockView blockView;
 	
+	@Shadow
+	private int field_55;
+	
 	private Random leaves_random = new Random();
 	
 	@Inject(method = "render", at = @At(
@@ -38,23 +42,46 @@ public class BlockRendererMixin {
 	), cancellable = true, locals = LocalCapture.CAPTURE_FAILSOFT)
 	private void leaves_render(BlockBase block, int x, int y, int z, CallbackInfoReturnable<Boolean> info, int side) {
 		byte meta = (byte) blockView.getTileMeta(x, y, z);
-		int texture = TextureListener.getTexture(block, meta);
-		if (texture > -1) {
+		LeafTextureInfo texture = TextureListener.getTexture(block, meta);
+		if (texture != null) {
 			if (!leaves_canRender(x, y, z)) {
 				info.setReturnValue(false);
 			}
 			else if (textureOverride == -1) {
-				leaves_largeCross(block, texture, x, y, z, true);
+				leaves_largeCross(block, texture.bushyTexture, x, y, z, true);
 				int above = blockView.getTileId(x, y + 1, z);
 				if (above == BlockBase.SNOW.id || above == BlockBase.SNOW_BLOCK.id) {
-					texture = TextureListener.getTextureSnow(block, meta);
-					if (texture > -1) {
-						leaves_largeCross(block, texture, x, y, z, false);
-					}
+					leaves_largeCross(block, texture.bushySnow, x, y, z, false);
+					renderStandardBlock(block, x, y, z);
+					
+					textureOverride = texture.snowSide;
+					TextureListener.renderTopAndBottom = false;
+					renderStandardBlock(block, x, y, z);
+					TextureListener.renderTopAndBottom = true;
+					textureOverride = -1;
+					
+					info.setReturnValue(true);
 				}
 			}
 		}
 	}
+	
+	@Shadow
+	public boolean renderStandardBlock(BlockBase block, int i, int j, int k) {
+		return false;
+	}
+	
+	@Shadow
+	public void renderNorthFace(BlockBase arg, double d, double d1, double d2, int i) {}
+	
+	@Shadow
+	public void renderSouthFace(BlockBase arg, double d, double d1, double d2, int i) {}
+	
+	@Shadow
+	public void renderEastFace(BlockBase arg, double d, double d1, double d2, int i) {}
+	
+	@Shadow
+	public void renderWestFace(BlockBase arg, double d, double d1, double d2, int i) {}
 	
 	private void leaves_largeCross(BlockBase block, int texture, int x, int y, int z, boolean colored) {
 		Atlas atlas = Atlases.getStationTerrain();
