@@ -4,7 +4,7 @@
 	"version": "${version}",
 
 	"name": "Bushy Leaves",
-	"description": "Will make leaves bushy! Should work with mods leaves too. Configurable",
+	"description": "Will make leaves bushy! Should work with leaves from other mods too. Configurable",
 	"authors": [
 		"paulevs"
 	],
