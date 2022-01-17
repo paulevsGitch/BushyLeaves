@@ -3,7 +3,7 @@
   <img src="https://github.com/paulevsGitch/BushyLeaves/blob/main/screen.png" />
 </p>
 
-A small mod that will make leaves bushy and will enhance leaves rendering.
+A small mod for Station API (STAPI), for Minecraft beta 1.7.3, that will make leaves bushy and will enhance leaves rendering.
 Leaves inside tree will be not rendered, and leaves that are visible will have
 additional cross model that will make them more "bushy". Leaves covered with snow
 will have special snowy texture.
@@ -11,6 +11,9 @@ will have special snowy texture.
 This mod will automatically add leaves from other mods (if they are extending
 Leaves block). If leaves are not added or added incorrectly you can add them
 with the config (configs/bushyleaves.json);
+
+### Requires:
+Station API: [2.0 or newer](https://github.com/ModificationStation/StationAPI/releases/tag/2.0-PRE2)
 
 ### Default config:
 ```json
