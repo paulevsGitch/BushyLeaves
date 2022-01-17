@@ -1,0 +1,35 @@
+{
+	"schemaVersion": 1,
+	"id": "bushyleaves",
+	"version": "${version}",
+
+	"name": "Bushy Leaves",
+	"description": "Will make leaves bushy! Should work with mods leaves too. Configurable",
+	"authors": [
+		"paulevs"
+	],
+	"contact": {
+		"homepage": "https://github.com/paulevsGitch/BushyLeaves",
+		"sources": "https://github.com/paulevsGitch/BushyLeaves",
+		"issues": "https://github.com/paulevsGitch/BushyLeaves/issues",
+		"discord": "https://discord.gg/kYuATbYbKW"
+	},
+
+	"license": "CC0-1.0",
+	"icon": "assets/bushyleaves/icon.png",
+
+	"environment": "*",
+	"entrypoints": {
+		"stationapi:event_bus": [
+			"paulevs.bushyleaves.listeners.TextureListener"
+		]
+	},
+	"mixins": [
+		"bushyleaves.mixins.json"
+	],
+
+	"depends": {
+		"minecraft": "1.0.0-beta.7.3",
+		"stationapi": ">=2.0-PRE2"
+	}
+}
