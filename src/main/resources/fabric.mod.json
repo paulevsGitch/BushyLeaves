@@ -15,7 +15,7 @@
 		"discord": "https://discord.gg/kYuATbYbKW"
 	},
 
-	"license": "CC0-1.0",
+	"license": "MIT",
 	"icon": "assets/bushyleaves/icon.png",
 
 	"environment": "*",

@@ -26,15 +26,15 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 public class TextureListener {
 	private static final Map<BlockBase, Map<Byte, LeafTextureInfo>> TEXTURES = new HashMap<>();
 	public static boolean renderTopAndBottom = true;
-	//private static final Map<BlockBase, Map<Byte, Integer>> TEXTURES = new HashMap<>();
-	//private static final Map<BlockBase, Map<Byte, Integer>> SNOWY = new HashMap<>();
 	private static int[] defaultMask;
 	
 	public static final String MOD_ID = "bushyleaves";
@@ -53,10 +53,9 @@ public class TextureListener {
 		}
 		
 		Collection<LeafInfo> leaves = collectLeaves();
+		List<TextureCache> textureCache = new ArrayList<>();
 		
 		for (LeafInfo leaf : leaves) {
-			System.out.println(leaf);
-			
 			int lastTexture = -1;
 			LeafTextureInfo lastInfo = null;
 			
@@ -66,6 +65,12 @@ public class TextureListener {
 				metas = meta16;
 			}
 			
+			int id;
+			int textureBushy;
+			int textureSideSnow;
+			int textureBushySnow;
+			Sprite sprite;
+			
 			for (byte meta : metas) {
 				int texture = block.getTextureForSide(0, meta);
 				if (texture != lastTexture) {
@@ -73,17 +78,38 @@ public class TextureListener {
 					Map<Byte, LeafTextureInfo> textures = getTextures(block);
 					
 					localTexture = makeTexture(image, mask);
-					Sprite sprite = Atlases.getStationTerrain().addTexture(MOD_ID + "_" + (innerID++));
-					int textureBushy = sprite.index;
+					id = getFromCache(localTexture, textureCache);
+					if (id == -1) {
+						sprite = Atlases.getStationTerrain().addTexture(MOD_ID + "_" + (innerID++));
+						putToCache(localTexture, sprite.index, textureCache);
+						textureBushy = sprite.index;
+					}
+					else {
+						textureBushy = id;
+					}
 					lastTexture = texture;
 					
 					localTexture = makeSnow(localTexture, snow);
-					sprite = Atlases.getStationTerrain().addTexture(MOD_ID + "_" + (innerID++));
-					int textureBushySnow = sprite.index;
+					id = getFromCache(localTexture, textureCache);
+					if (id == -1) {
+						sprite = Atlases.getStationTerrain().addTexture(MOD_ID + "_" + (innerID++));
+						putToCache(localTexture, sprite.index, textureCache);
+						textureBushySnow = sprite.index;
+					}
+					else {
+						textureBushySnow = id;
+					}
 					
 					localTexture = makeSnow(image, snow);
-					sprite = Atlases.getStationTerrain().addTexture(MOD_ID + "_" + (innerID++));
-					int textureSideSnow = sprite.index;
+					id = getFromCache(localTexture, textureCache);
+					if (id == -1) {
+						sprite = Atlases.getStationTerrain().addTexture(MOD_ID + "_" + (innerID++));
+						putToCache(localTexture, sprite.index, textureCache);
+						textureSideSnow = sprite.index;
+					}
+					else {
+						textureSideSnow = id;
+					}
 					
 					lastInfo = new LeafTextureInfo(textureBushy, textureBushySnow, textureSideSnow);
 					textures.put(meta, lastInfo);
@@ -95,6 +121,32 @@ public class TextureListener {
 				}
 			}
 		}
+	}
+	
+	private int getFromCache(BufferedImage image, List<TextureCache> textureCache) {
+		for (TextureCache cache: textureCache) {
+			if (cache.texture.getWidth() == image.getWidth() && cache.texture.getHeight() == image.getHeight() && hasSameData(cache.texture, image)) {
+				return cache.id;
+			}
+		}
+		return -1;
+	}
+	
+	private void putToCache(BufferedImage image, int id, List<TextureCache> textureCache) {
+		textureCache.add(new TextureCache(image, id));
+	}
+	
+	private boolean hasSameData(BufferedImage img1, BufferedImage img2) {
+		int[] data1 = new int[img1.getWidth() * img1.getHeight()];
+		int[] data2 = new int[data1.length];
+		img1.getRGB(0, 0, img1.getWidth(), img1.getHeight(), data1, 0, img1.getWidth());
+		img2.getRGB(0, 0, img2.getWidth(), img2.getHeight(), data2, 0, img2.getWidth());
+		for (int i = 0; i < data1.length; i++) {
+			if (data1[i] != data2[i]) {
+				return false;
+			}
+		}
+		return true;
 	}
 	
 	private Collection<LeafInfo> collectLeaves() {
@@ -121,9 +173,13 @@ public class TextureListener {
 			JsonUtil.saveJson(configFile, config);
 		}
 		
+		Set<String> leavesClasses = new HashSet<>();
+		leavesClasses.add("BlockTFLeaves");
+		leavesClasses.add("BlockTFHedge");
+		
 		Map<String, LeafInfo> leaves = new HashMap<>();
 		for (BlockBase block : BlockBase.BY_ID) {
-			if (block instanceof Leaves) {
+			if (block != null && (block instanceof Leaves || leavesClasses.contains(getClassName(block)))) {
 				String name = BlockRegistry.INSTANCE.getIdentifier(block).toString();
 				LeafInfo info = leaves.computeIfAbsent(name, i -> new LeafInfo(block));
 				info.meta.add((byte) -1);
@@ -167,6 +223,12 @@ public class TextureListener {
 		return leaves.values();
 	}
 	
+	private String getClassName(BlockBase block) {
+		String name = block.getClass().getName();
+		int index = name.lastIndexOf('.');
+		return index > 0 ? name.substring(index + 1) : name;
+	}
+	
 	private Map<Byte, LeafTextureInfo> getTextures(BlockBase block) {
 		return TEXTURES.computeIfAbsent(block, i -> new HashMap<>());
 	}
@@ -177,14 +239,7 @@ public class TextureListener {
 	}
 	
 	private BufferedImage extractTexture(BlockBase block, int textureID) {
-		Atlas atlas;
-		if (textureID < 256) {
-			atlas = Atlases.getTerrain();
-		}
-		else {
-			atlas = ((CustomAtlasProvider) block).getAtlas().of(textureID);
-		}
-		
+		Atlas atlas = ((CustomAtlasProvider) block).getAtlas().of(textureID);
 		Sprite sprite = atlas.getTexture(textureID);
 		BufferedImage image = atlas.getImage();
 		int x = MathHelper.floor(sprite.getStartU() * image.getWidth() + 0.5F);
@@ -313,6 +368,16 @@ public class TextureListener {
 			this.bushyTexture = bushyTexture;
 			this.bushySnow = bushySnow;
 			this.snowSide = snowSide;
+		}
+	}
+	
+	private class TextureCache {
+		final BufferedImage texture;
+		final int id;
+		
+		TextureCache(BufferedImage texture, int id) {
+			this.texture = texture;
+			this.id = id;
 		}
 	}
 }
